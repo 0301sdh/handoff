@@ -6,10 +6,10 @@ export interface Io {
   stderr: (text: string) => void;
 }
 
-const HELP = `skill-eval: evaluate LLM skills with test cases
+const HELP = `handoff: keep multi-day AI coding work on track
 
 Usage:
-  skill-eval [options]
+  handoff [options]
 
 Options:
   -h, --help     Show this help
@@ -48,14 +48,14 @@ export function run(argv: readonly string[], io: Io): number {
     parsed = parse(argv);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    io.stderr(`${message}\nRun "skill-eval --help" to see the options.\n`);
+    io.stderr(`${message}\nRun "handoff --help" to see the options.\n`);
     return 2;
   }
 
   const [command] = parsed.positionals;
   if (command !== undefined) {
     io.stderr(
-      `Unknown command: ${command}\nRun "skill-eval --help" to see the options.\n`,
+      `Unknown command: ${command}\nRun "handoff --help" to see the options.\n`,
     );
     return 2;
   }

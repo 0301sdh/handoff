@@ -1,10 +1,10 @@
 {
-  "name": "skill-eval",
+  "name": "handoff",
   "version": "0.1.0",
-  "description": "A CLI that evaluates LLM skills with test cases",
+  "description": "A CLI that keeps multi-day AI coding work on track",
   "type": "module",
   "bin": {
-    "skill-eval": "dist/bin.js"
+    "handoff": "dist/bin.js"
   },
   "files": [
     "dist"
