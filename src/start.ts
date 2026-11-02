@@ -24,8 +24,22 @@ export function estimateTokens(text: string): number {
   return Math.ceil(ascii / 4 + other / 1.5);
 }
 
-function fileBlock(relativePath: string, content: string): string {
+export function fileBlock(relativePath: string, content: string): string {
   return `<file path="${HANDOFF_DIR}/${relativePath}">\n${content.trimEnd()}\n</file>`;
+}
+
+export function readRequiredBlocks(
+  root: string,
+): { blocks: string[] } | { missing: string } {
+  const blocks: string[] = [];
+  for (const name of REQUIRED_FILES) {
+    const path = join(root, name);
+    if (!existsSync(path)) {
+      return { missing: path };
+    }
+    blocks.push(fileBlock(name, readFileSync(path, "utf8")));
+  }
+  return { blocks };
 }
 
 export function buildContext(projectRoot: string): StartResult {
@@ -34,14 +48,11 @@ export function buildContext(projectRoot: string): StartResult {
     return { status: "not-initialized", path: root };
   }
 
-  const blocks: string[] = [];
-  for (const name of REQUIRED_FILES) {
-    const path = join(root, name);
-    if (!existsSync(path)) {
-      return { status: "missing-file", path };
-    }
-    blocks.push(fileBlock(name, readFileSync(path, "utf8")));
+  const required = readRequiredBlocks(root);
+  if ("missing" in required) {
+    return { status: "missing-file", path: required.missing };
   }
+  const { blocks } = required;
 
   const { logs } = readLogNames(join(root, "logs"));
   const readLog = (name: string) => readFileSync(join(root, "logs", name), "utf8");

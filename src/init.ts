@@ -35,6 +35,7 @@ const INSTRUCTIONS_TEMPLATE = `# AI 작업 지침
 2. 대화 전체를 옮기지 말고 핵심만 요약해 logs/YYYY-MM-DD.md에 저장한다.
 3. 끝난 완료 조건은 spec.md에서 체크한다.
 4. 목표나 완료 조건이 바뀌었다면 날짜와 이유를 spec.md의 변경 기록에 남긴다.
+5. "handoff check"를 실행해 문제가 없을 때까지 고친다.
 
 ## 기록 형식
 아래 제목을 모두 그대로 쓴다.

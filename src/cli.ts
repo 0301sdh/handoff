@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { checkProject } from "./check.js";
+import { buildEndPrompt } from "./end.js";
 import { HANDOFF_DIR, initProject } from "./init.js";
 import { buildContext } from "./start.js";
 
@@ -17,6 +18,7 @@ Usage:
 Commands:
   init           Create ${HANDOFF_DIR}/ in the current directory
   start          Print the context for the AI to read
+  end            Print the wrap-up steps for the AI to follow
   check          Find missing items in the latest log
 
 Options:
@@ -102,6 +104,32 @@ function runStart(root: string, io: Io): number {
   return 0;
 }
 
+function runEnd(root: string, io: Io): number {
+  let result: ReturnType<typeof buildEndPrompt>;
+  try {
+    result = buildEndPrompt(root);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    io.stderr(`Could not read ${HANDOFF_DIR}/: ${message}\n`);
+    return 1;
+  }
+
+  if (result.status === "not-initialized") {
+    io.stderr(`${result.path} was not found.\nRun "handoff init" first.\n`);
+    return 1;
+  }
+
+  if (result.status === "missing-file") {
+    io.stderr(
+      `${result.path} was not found.\nRestore the file, or remove ${HANDOFF_DIR}/ and run "handoff init" again.\n`,
+    );
+    return 1;
+  }
+
+  io.stdout(result.prompt);
+  return 0;
+}
+
 function runCheck(root: string, io: Io): number {
   let result: ReturnType<typeof checkProject>;
   try {
@@ -169,6 +197,7 @@ export function run(
   const handlers = new Map([
     ["init", runInit],
     ["start", runStart],
+    ["end", runEnd],
     ["check", runCheck],
   ]);
   const handler = handlers.get(command);
