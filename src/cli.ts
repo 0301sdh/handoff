@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { checkProject } from "./check.js";
 import { HANDOFF_DIR, initProject } from "./init.js";
+import { buildContext } from "./start.js";
 
 export interface Io {
   stdout: (text: string) => void;
@@ -15,6 +16,7 @@ Usage:
 
 Commands:
   init           Create ${HANDOFF_DIR}/ in the current directory
+  start          Print the context for the AI to read
   check          Find missing items in the latest log
 
 Options:
@@ -67,6 +69,35 @@ function runInit(root: string, io: Io): number {
 
   io.stdout(
     `Created ${result.path}\nNext: write your goal and completion criteria in ${HANDOFF_DIR}/spec.md, then your rules in ${HANDOFF_DIR}/rules.md.\n`,
+  );
+  return 0;
+}
+
+function runStart(root: string, io: Io): number {
+  let result: ReturnType<typeof buildContext>;
+  try {
+    result = buildContext(root);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    io.stderr(`Could not read ${HANDOFF_DIR}/: ${message}\n`);
+    return 1;
+  }
+
+  if (result.status === "not-initialized") {
+    io.stderr(`${result.path} was not found.\nRun "handoff init" first.\n`);
+    return 1;
+  }
+
+  if (result.status === "missing-file") {
+    io.stderr(
+      `${result.path} was not found.\nRestore the file, or remove ${HANDOFF_DIR}/ and run "handoff init" again.\n`,
+    );
+    return 1;
+  }
+
+  io.stdout(result.context);
+  io.stderr(
+    `Estimated tokens: ~${String(result.tokens)} (~${String(result.tokensWithAllLogs)} with all logs)\n`,
   );
   return 0;
 }
@@ -135,7 +166,13 @@ export function run(
     return 0;
   }
 
-  if (command !== "init" && command !== "check") {
+  const handlers = new Map([
+    ["init", runInit],
+    ["start", runStart],
+    ["check", runCheck],
+  ]);
+  const handler = handlers.get(command);
+  if (handler === undefined) {
     io.stderr(
       `Unknown command: ${command}\nRun "handoff --help" to see the options.\n`,
     );
@@ -149,5 +186,5 @@ export function run(
     return 2;
   }
 
-  return command === "init" ? runInit(root, io) : runCheck(root, io);
+  return handler(root, io);
 }

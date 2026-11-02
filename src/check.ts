@@ -1,6 +1,7 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HANDOFF_DIR } from "./init.js";
+import { readLogNames } from "./logs.js";
 
 const CRITERIA_HEADING = "완료 조건";
 const CRITERIA_CHECK_HEADING = "완료 조건 점검";
@@ -19,20 +20,6 @@ export type CheckResult =
   | { status: "not-initialized"; path: string }
   | { status: "no-logs"; path: string }
   | { status: "checked"; log: string; problems: string[] };
-
-function isValidDate(value: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (match === null) {
-    return false;
-  }
-  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
-}
 
 function parseSections(text: string): Map<string, string[]> {
   const sections = new Map<string, string[]>();
@@ -126,21 +113,18 @@ export function checkProject(projectRoot: string): CheckResult {
   }
 
   const logsPath = join(root, "logs");
-  const names = existsSync(logsPath)
-    ? readdirSync(logsPath).filter((name) => name.endsWith(".md"))
-    : [];
-  const logs = names.filter((name) => isValidDate(name.slice(0, -".md".length))).sort();
+  const { logs, badNames } = readLogNames(logsPath);
   const latest = logs.at(-1);
   if (latest === undefined) {
     return { status: "no-logs", path: logsPath };
   }
 
-  const badNames = names
-    .filter((name) => !logs.includes(name))
-    .map((name) => `Invalid log file name: ${name} (use YYYY-MM-DD.md)`);
   return {
     status: "checked",
     log: join(logsPath, latest),
-    problems: [...badNames, ...checkLog(root, latest)],
+    problems: [
+      ...badNames.map((name) => `Invalid log file name: ${name} (use YYYY-MM-DD.md)`),
+      ...checkLog(root, latest),
+    ],
   };
 }
