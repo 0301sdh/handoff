@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { checkProject } from "./check.js";
 import { HANDOFF_DIR, initProject } from "./init.js";
 
 export interface Io {
@@ -14,6 +15,7 @@ Usage:
 
 Commands:
   init           Create ${HANDOFF_DIR}/ in the current directory
+  check          Find missing items in the latest log
 
 Options:
   -h, --help     Show this help
@@ -69,6 +71,40 @@ function runInit(root: string, io: Io): number {
   return 0;
 }
 
+function runCheck(root: string, io: Io): number {
+  let result: ReturnType<typeof checkProject>;
+  try {
+    result = checkProject(root);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    io.stderr(`Could not check ${HANDOFF_DIR}/: ${message}\n`);
+    return 1;
+  }
+
+  if (result.status === "not-initialized") {
+    io.stderr(`${result.path} was not found.\nRun "handoff init" first.\n`);
+    return 1;
+  }
+
+  if (result.status === "no-logs") {
+    io.stderr(
+      `No log found in ${result.path}.\nSave today's log as YYYY-MM-DD.md, using the format in ${HANDOFF_DIR}/INSTRUCTIONS.md.\n`,
+    );
+    return 1;
+  }
+
+  if (result.problems.length > 0) {
+    const lines = result.problems.map((problem) => `- ${problem}`).join("\n");
+    io.stderr(
+      `Found ${String(result.problems.length)} problem(s) in ${result.log}:\n${lines}\nFix these, then run "handoff check" again.\n`,
+    );
+    return 1;
+  }
+
+  io.stdout(`OK: ${result.log}\n`);
+  return 0;
+}
+
 export function run(
   argv: readonly string[],
   io: Io,
@@ -99,7 +135,7 @@ export function run(
     return 0;
   }
 
-  if (command !== "init") {
+  if (command !== "init" && command !== "check") {
     io.stderr(
       `Unknown command: ${command}\nRun "handoff --help" to see the options.\n`,
     );
@@ -108,10 +144,10 @@ export function run(
 
   if (extra.length > 0) {
     io.stderr(
-      `"handoff init" takes no arguments, but got: ${extra.join(" ")}\nRun it inside the project directory.\n`,
+      `"handoff ${command}" takes no arguments, but got: ${extra.join(" ")}\nRun it inside the project directory.\n`,
     );
     return 2;
   }
 
-  return runInit(root, io);
+  return command === "init" ? runInit(root, io) : runCheck(root, io);
 }
