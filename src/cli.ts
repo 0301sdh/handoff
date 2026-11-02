@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { checkProject } from "./check.js";
+import { installClaude } from "./claude.js";
 import { buildEndPrompt } from "./end.js";
 import { HANDOFF_DIR, initProject } from "./init.js";
 import { buildContext } from "./start.js";
@@ -22,6 +23,7 @@ Commands:
   check          Find missing items in the latest log
 
 Options:
+  --claude       With init: connect to Claude Code (safe to run again)
   -h, --help     Show this help
   -v, --version  Show the version
 `;
@@ -46,13 +48,32 @@ function parse(argv: readonly string[]) {
     args: [...argv],
     allowPositionals: true,
     options: {
+      claude: { type: "boolean" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
   });
 }
 
-function runInit(root: string, io: Io): number {
+function connectClaude(root: string, io: Io): number {
+  let result: ReturnType<typeof installClaude>;
+  try {
+    result = installClaude(root);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    io.stderr(`Could not connect to Claude Code: ${message}\n`);
+    return 1;
+  }
+
+  io.stdout(
+    result.hookAdded || result.skillAdded
+      ? `Connected to Claude Code. New sessions read ${HANDOFF_DIR}/ automatically, and /handoff-end wraps up the day.\n`
+      : "Already connected to Claude Code.\n",
+  );
+  return 0;
+}
+
+function runInit(root: string, io: Io, claude: boolean): number {
   let result: ReturnType<typeof initProject>;
   try {
     result = initProject(root);
@@ -63,6 +84,9 @@ function runInit(root: string, io: Io): number {
   }
 
   if (result.status === "exists") {
+    if (claude) {
+      return connectClaude(root, io);
+    }
     io.stderr(
       `${result.path} already exists, so nothing was changed.\nEdit its files directly, or remove it and run "handoff init" again.\n`,
     );
@@ -72,7 +96,7 @@ function runInit(root: string, io: Io): number {
   io.stdout(
     `Created ${result.path}\nNext: write your goal and completion criteria in ${HANDOFF_DIR}/spec.md, then your rules in ${HANDOFF_DIR}/rules.md.\n`,
   );
-  return 0;
+  return claude ? connectClaude(root, io) : 0;
 }
 
 function runStart(root: string, io: Io): number {
@@ -194,8 +218,9 @@ export function run(
     return 0;
   }
 
+  const claude = parsed.values.claude === true;
   const handlers = new Map([
-    ["init", runInit],
+    ["init", (projectRoot: string, output: Io) => runInit(projectRoot, output, claude)],
     ["start", runStart],
     ["end", runEnd],
     ["check", runCheck],
@@ -212,6 +237,11 @@ export function run(
     io.stderr(
       `"handoff ${command}" takes no arguments, but got: ${extra.join(" ")}\nRun it inside the project directory.\n`,
     );
+    return 2;
+  }
+
+  if (claude && command !== "init") {
+    io.stderr(`--claude only works with "handoff init".\n`);
     return 2;
   }
 

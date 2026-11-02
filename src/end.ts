@@ -37,6 +37,7 @@ export function buildEndPrompt(projectRoot: string, today: Date = new Date()): E
     logExists
       ? `2. 오늘 기록이 이미 있다. ${HANDOFF_DIR}/${logRelativePath}의 기존 내용을 지우지 말고 이어서 고친다.`
       : `2. 오늘 대화의 핵심을 INSTRUCTIONS.md의 기록 형식으로 요약해 ${HANDOFF_DIR}/${logRelativePath}에 저장한다.`,
+    '   실제로 없었던 대화나 결정은 지어내지 말고 "없음"으로 적는다.',
     "3. 끝난 완료 조건은 spec.md에서 체크하고, 목표나 완료 조건이 바뀌었다면 날짜와 이유를 변경 기록에 남긴다.",
     '4. "handoff check"를 실행해 문제가 없을 때까지 고친다.',
     "5. 위반했거나 끝나지 않은 항목과 다음 할 일을 사용자에게 알린다.",
