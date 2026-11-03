@@ -33,7 +33,7 @@ export function buildEndPrompt(projectRoot: string, today: Date = new Date()): E
   const steps = [
     "오늘 작업을 마무리한다. 아래 순서를 그대로 따른다.",
     "",
-    "1. 실제 코드와 변경 내역을 확인해 spec.md의 완료 조건과 rules.md의 주의사항에 하나씩 대조한다. 확인하지 못한 항목은 통과로 적지 않는다.",
+    "1. 실제 코드와 변경 내역을 확인해 spec.md의 완료 조건, rules.md의 주의사항, spec.md의 참고 문서에 하나씩 대조한다. 참고 문서는 오늘 작업과 관련된 것을 실제로 열어 보고, 관련 없으면 \"해당 없음\"으로 적는다. 확인하지 못한 항목은 통과로 적지 않는다.",
     logExists
       ? `2. 오늘 기록이 이미 있다. ${HANDOFF_DIR}/${logRelativePath}의 기존 내용을 지우지 말고 이어서 고친다.`
       : `2. 오늘 대화의 핵심을 INSTRUCTIONS.md의 기록 형식으로 요약해 ${HANDOFF_DIR}/${logRelativePath}에 저장한다.`,

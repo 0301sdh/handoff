@@ -7,6 +7,8 @@ const CRITERIA_HEADING = "완료 조건";
 const CRITERIA_CHECK_HEADING = "완료 조건 점검";
 const RULES_CHECK_HEADING = "주의사항 점검";
 const NEXT_HEADING = "다음 할 일";
+const DOCS_HEADING = "참고 문서";
+const DOCS_CHECK_HEADING = "참고 문서 점검";
 const REQUIRED_HEADINGS = [
   "오늘 한 일",
   "결정한 것",
@@ -25,8 +27,18 @@ function parseSections(text: string): Map<string, string[]> {
   const sections = new Map<string, string[]>();
   let current: string[] | undefined;
   let inFence = false;
+  let inComment = false;
 
   for (const line of text.split(/\r?\n/)) {
+    if (!inFence && line.includes("<!--")) {
+      inComment = true;
+    }
+    if (inComment) {
+      if (line.includes("-->")) {
+        inComment = false;
+      }
+      continue;
+    }
     if (line.trimStart().startsWith("```")) {
       inFence = !inFence;
     }
@@ -64,7 +76,63 @@ function readRuleIds(rulesPath: string): string[] {
   });
 }
 
-function checkLog(root: string, logName: string): string[] {
+interface ReferenceDoc {
+  id: string;
+  target: string;
+}
+
+function readReferenceDocs(specPath: string): { docs: ReferenceDoc[]; problems: string[] } {
+  const lines = parseSections(readFileSync(specPath, "utf8")).get(DOCS_HEADING);
+  const docs: ReferenceDoc[] = [];
+  const problems: string[] = [];
+  for (const item of listItems(lines ?? [])) {
+    const id = /^\[(D\d+)\]/.exec(item)?.[1];
+    if (id === undefined) {
+      continue;
+    }
+    const target = /^\[D\d+\]\s+(.+?):\s+\S/.exec(item)?.[1];
+    if (target === undefined) {
+      problems.push(`Reference document ${id} in spec.md needs "path or link: when to read"`);
+    } else {
+      docs.push({ id, target });
+    }
+  }
+  return { docs, problems };
+}
+
+function isLink(target: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(target);
+}
+
+function checkReferenceDocs(
+  projectRoot: string,
+  specPath: string,
+  sections: Map<string, string[]>,
+): string[] {
+  const { docs, problems } = readReferenceDocs(specPath);
+  for (const doc of docs) {
+    if (!isLink(doc.target) && !existsSync(join(projectRoot, doc.target))) {
+      problems.push(`Reference document not found: ${doc.id} ${doc.target}`);
+    }
+  }
+  if (docs.length === 0) {
+    return problems;
+  }
+
+  const lines = sections.get(DOCS_CHECK_HEADING);
+  if (lines === undefined) {
+    return [...problems, `Missing heading: ## ${DOCS_CHECK_HEADING}`];
+  }
+  const checked = listItems(lines);
+  for (const doc of docs) {
+    if (!checked.some((item) => item.startsWith(`${doc.id}:`))) {
+      problems.push(`Reference document not checked: ${doc.id}`);
+    }
+  }
+  return problems;
+}
+
+function checkLog(projectRoot: string, root: string, logName: string): string[] {
   const problems: string[] = [];
   const sections = parseSections(readFileSync(join(root, "logs", logName), "utf8"));
 
@@ -82,6 +150,7 @@ function checkLog(root: string, logName: string): string[] {
         problems.push(`Completion criterion not checked: ${criterion}`);
       }
     }
+    problems.push(...checkReferenceDocs(projectRoot, specPath, sections));
   } else {
     problems.push("Missing file: spec.md");
   }
@@ -124,7 +193,7 @@ export function checkProject(projectRoot: string): CheckResult {
     log: join(logsPath, latest),
     problems: [
       ...badNames.map((name) => `Invalid log file name: ${name} (use YYYY-MM-DD.md)`),
-      ...checkLog(root, latest),
+      ...checkLog(projectRoot, root, latest),
     ],
   };
 }

@@ -210,3 +210,90 @@ describe("handoff check", () => {
     expect(runCli("check").exitCode).toBe(0);
   });
 });
+
+describe("handoff check with reference documents", () => {
+  const specWithDocs = SPEC.replace(
+    "## 변경 기록",
+    "## 참고 문서\n- [D1] api.md: API를 만들 때\n- [D2] https://figma.com/file/abc: 화면을 만들 때\n\n## 변경 기록",
+  );
+  const docsCheck = "## 참고 문서 점검\n- D1: 일치 (POST /posts 확인)\n- D2: 해당 없음\n\n## 다음 할 일";
+
+  function setUpWithDocs() {
+    setUp();
+    writeFileSync(join(root, ".handoff", "spec.md"), specWithDocs);
+    writeFileSync(join(root, "api.md"), "# API");
+  }
+
+  it("passes when every document is checked", () => {
+    setUpWithDocs();
+    writeLog("2026-11-03.md", VALID_LOG.replace("## 다음 할 일", docsCheck));
+
+    expect(runCli("check").exitCode).toBe(0);
+  });
+
+  it("requires the heading only when there are documents", () => {
+    setUpWithDocs();
+    writeLog("2026-11-03.md", VALID_LOG);
+
+    const result = runCli("check");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Missing heading: ## 참고 문서 점검");
+  });
+
+  it("reports an unchecked document", () => {
+    setUpWithDocs();
+    writeLog(
+      "2026-11-03.md",
+      VALID_LOG.replace("## 다음 할 일", docsCheck).replace("- D2: 해당 없음\n", ""),
+    );
+
+    const result = runCli("check");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Reference document not checked: D2");
+  });
+
+  it("reports a missing local file but not a link", () => {
+    setUpWithDocs();
+    rmSync(join(root, "api.md"));
+    writeLog("2026-11-03.md", VALID_LOG.replace("## 다음 할 일", docsCheck));
+
+    const result = runCli("check");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Reference document not found: D1 api.md");
+    expect(result.stderr).not.toContain("D2 https");
+  });
+
+  it("reports a document without a reading condition", () => {
+    setUp();
+    writeFileSync(
+      join(root, ".handoff", "spec.md"),
+      SPEC.replace("## 변경 기록", "## 참고 문서\n- [D1] api.md\n\n## 변경 기록"),
+    );
+    writeLog("2026-11-03.md", VALID_LOG);
+
+    const result = runCli("check");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Reference document D1 in spec.md needs");
+  });
+
+  it("ignores the example in the template", () => {
+    runCli("init");
+    writeFileSync(join(root, ".handoff", "rules.md"), RULES);
+    writeLog(
+      "2026-11-03.md",
+      VALID_LOG.replace(
+        "- 로그인할 수 있다: 완료 (테스트 통과)\n- 글을 작성할 수 있다: 미완료",
+        "- 첫 번째 완료 조건: 미완료",
+      ),
+    );
+
+    const result = runCli("check");
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+  });
+});
