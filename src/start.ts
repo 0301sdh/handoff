@@ -8,21 +8,7 @@ const REQUIRED_FILES = ["INSTRUCTIONS.md", "spec.md", "rules.md"];
 export type StartResult =
   | { status: "not-initialized"; path: string }
   | { status: "missing-file"; path: string }
-  | { status: "ready"; context: string; tokens: number; tokensWithAllLogs: number };
-
-// A rough estimate: about 4 characters per token for ASCII, 1.5 for others such as Korean.
-export function estimateTokens(text: string): number {
-  let ascii = 0;
-  let other = 0;
-  for (const char of text) {
-    if (char.charCodeAt(0) < 128) {
-      ascii += 1;
-    } else {
-      other += 1;
-    }
-  }
-  return Math.ceil(ascii / 4 + other / 1.5);
-}
+  | { status: "ready"; context: string };
 
 export function fileBlock(relativePath: string, content: string): string {
   return `<file path="${HANDOFF_DIR}/${relativePath}">\n${content.trimEnd()}\n</file>`;
@@ -69,12 +55,5 @@ export function buildContext(projectRoot: string): StartResult {
     blocks.push(`Older logs. Read one only when you need it:\n${paths}`);
   }
 
-  const context = `${blocks.join("\n\n")}\n`;
-  const olderText = older.map(readLog).join("");
-  return {
-    status: "ready",
-    context,
-    tokens: estimateTokens(context),
-    tokensWithAllLogs: estimateTokens(context + olderText),
-  };
+  return { status: "ready", context: `${blocks.join("\n\n")}\n` };
 }

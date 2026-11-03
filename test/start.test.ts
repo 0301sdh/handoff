@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { run } from "../src/cli.js";
-import { estimateTokens } from "../src/start.js";
 
 let root: string;
 
@@ -79,18 +78,6 @@ describe("handoff start", () => {
     expect(stdout).not.toContain("not a log");
   });
 
-  it("keeps the token estimate out of the context", () => {
-    runCli("init");
-    writeLog("2026-11-01.md", "x".repeat(4000));
-    writeLog("2026-11-02.md", "latest");
-
-    const { stdout, stderr } = runCli("start");
-
-    expect(stdout).not.toContain("Estimated tokens");
-    const match = /~(\d+) \(~(\d+) with all logs\)/.exec(stderr);
-    expect(Number(match?.[2]) - Number(match?.[1])).toBe(1000);
-  });
-
   it("asks for init when .handoff is missing", () => {
     const result = runCli("start");
 
@@ -108,19 +95,5 @@ describe("handoff start", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("rules.md");
     expect(result.stdout).toBe("");
-  });
-});
-
-describe("estimateTokens", () => {
-  it("counts ASCII as about 4 characters per token", () => {
-    expect(estimateTokens("abcdefgh")).toBe(2);
-  });
-
-  it("counts Korean as about 1.5 characters per token", () => {
-    expect(estimateTokens("가나다")).toBe(2);
-  });
-
-  it("returns 0 for empty text", () => {
-    expect(estimateTokens("")).toBe(0);
   });
 });

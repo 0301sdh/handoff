@@ -122,9 +122,6 @@ function runStart(root: string, io: Io): number {
   }
 
   io.stdout(result.context);
-  io.stderr(
-    `Estimated tokens: ~${String(result.tokens)} (~${String(result.tokensWithAllLogs)} with all logs)\n`,
-  );
   return 0;
 }
 
