@@ -78,6 +78,22 @@ describe("handoff start", () => {
     expect(stdout).not.toContain("not a log");
   });
 
+  it("prints the context as JSON with --json", () => {
+    runCli("init");
+
+    const { exitCode, stdout } = runCli("start", "--json");
+
+    expect(exitCode).toBe(0);
+    const output = JSON.parse(stdout) as { additionalContext: string };
+    expect(output.additionalContext).toContain('<file path=".handoff/spec.md">');
+  });
+
+  it("rejects --json on other commands", () => {
+    runCli("init");
+
+    expect(runCli("end", "--json").exitCode).toBe(2);
+  });
+
   it("asks for init when .handoff is missing", () => {
     const result = runCli("start");
 

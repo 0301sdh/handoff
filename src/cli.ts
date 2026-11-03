@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 import { parseArgs } from "node:util";
+import { AGENT_NAMES, AGENTS, type Agent, connectAgents, isAgent } from "./agents.js";
 import { checkProject } from "./check.js";
-import { installClaude } from "./claude.js";
 import { buildEndPrompt } from "./end.js";
 import { HANDOFF_DIR, initProject } from "./init.js";
 import { buildContext } from "./start.js";
@@ -17,15 +18,17 @@ Usage:
   handoff <command> [options]
 
 Commands:
-  init           Create ${HANDOFF_DIR}/ in the current directory
-  start          Print the context for the AI to read
-  end            Print the wrap-up steps for the AI to follow
-  check          Find missing items in the latest log
+  init            Create ${HANDOFF_DIR}/ in the current directory
+  start           Print the context for the AI to read
+  end             Print the wrap-up steps for the AI to follow
+  check           Find missing items in the latest log
 
 Options:
-  --claude       With init: connect to Claude Code (safe to run again)
-  -h, --help     Show this help
-  -v, --version  Show the version
+  --agent <name>  With init: connect an AI tool (${AGENTS.join(", ")}).
+                  Repeat it to connect several. Safe to run again.
+  --json          With start: print the context as JSON for hooks
+  -h, --help      Show this help
+  -v, --version   Show the version
 `;
 
 function readVersion(): string {
@@ -48,32 +51,40 @@ function parse(argv: readonly string[]) {
     args: [...argv],
     allowPositionals: true,
     options: {
-      claude: { type: "boolean" },
+      agent: { type: "string", multiple: true },
+      json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
   });
 }
 
-function connectClaude(root: string, io: Io): number {
-  let result: ReturnType<typeof installClaude>;
+function connect(root: string, io: Io, agents: readonly Agent[]): number {
+  const names = agents.map((agent) => AGENT_NAMES[agent]).join(", ");
+  let written: string[];
   try {
-    result = installClaude(root);
+    written = connectAgents(root, agents);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    io.stderr(`Could not connect to Claude Code: ${message}\n`);
+    io.stderr(`Could not connect to ${names}: ${message}\n`);
     return 1;
   }
 
+  if (written.length === 0) {
+    io.stdout(`Already connected to ${names}.\n`);
+    return 0;
+  }
+  const files = written.map((path) => `- ${relative(root, path)}`).join("\n");
   io.stdout(
-    result.hookAdded || result.skillAdded
-      ? `Connected to Claude Code. New sessions read ${HANDOFF_DIR}/ automatically, and /handoff-end wraps up the day.\n`
-      : "Already connected to Claude Code.\n",
+    `Connected to ${names}. New sessions read ${HANDOFF_DIR}/ automatically, and the handoff-end skill wraps up the day.\nWrote:\n${files}\n`,
   );
+  if (agents.includes("codex")) {
+    io.stdout(`Codex asks you to trust new hooks: run /hooks in Codex once.\n`);
+  }
   return 0;
 }
 
-function runInit(root: string, io: Io, claude: boolean): number {
+function runInit(root: string, io: Io, agents: readonly Agent[]): number {
   let result: ReturnType<typeof initProject>;
   try {
     result = initProject(root);
@@ -84,8 +95,8 @@ function runInit(root: string, io: Io, claude: boolean): number {
   }
 
   if (result.status === "exists") {
-    if (claude) {
-      return connectClaude(root, io);
+    if (agents.length > 0) {
+      return connect(root, io, agents);
     }
     io.stderr(
       `${result.path} already exists, so nothing was changed.\nEdit its files directly, or remove it and run "handoff init" again.\n`,
@@ -96,10 +107,10 @@ function runInit(root: string, io: Io, claude: boolean): number {
   io.stdout(
     `Created ${result.path}\nNext: write your goal and completion criteria in ${HANDOFF_DIR}/spec.md, then your rules in ${HANDOFF_DIR}/rules.md.\n`,
   );
-  return claude ? connectClaude(root, io) : 0;
+  return agents.length > 0 ? connect(root, io, agents) : 0;
 }
 
-function runStart(root: string, io: Io): number {
+function runStart(root: string, io: Io, json: boolean): number {
   let result: ReturnType<typeof buildContext>;
   try {
     result = buildContext(root);
@@ -121,7 +132,7 @@ function runStart(root: string, io: Io): number {
     return 1;
   }
 
-  io.stdout(result.context);
+  io.stdout(json ? `${JSON.stringify({ additionalContext: result.context })}\n` : result.context);
   return 0;
 }
 
@@ -215,10 +226,12 @@ export function run(
     return 0;
   }
 
-  const claude = parsed.values.claude === true;
+  const agentNames = parsed.values.agent ?? [];
+  const json = parsed.values.json === true;
+  const agents = [...new Set(agentNames.filter(isAgent))];
   const handlers = new Map([
-    ["init", (projectRoot: string, output: Io) => runInit(projectRoot, output, claude)],
-    ["start", runStart],
+    ["init", (projectRoot: string, output: Io) => runInit(projectRoot, output, agents)],
+    ["start", (projectRoot: string, output: Io) => runStart(projectRoot, output, json)],
     ["end", runEnd],
     ["check", runCheck],
   ]);
@@ -237,8 +250,19 @@ export function run(
     return 2;
   }
 
-  if (claude && command !== "init") {
-    io.stderr(`--claude only works with "handoff init".\n`);
+  if (agentNames.length > 0 && command !== "init") {
+    io.stderr(`--agent only works with "handoff init".\n`);
+    return 2;
+  }
+
+  const unknown = agentNames.filter((name) => !isAgent(name));
+  if (unknown.length > 0) {
+    io.stderr(`Unknown agent: ${unknown.join(", ")}\nChoose from: ${AGENTS.join(", ")}\n`);
+    return 2;
+  }
+
+  if (json && command !== "start") {
+    io.stderr(`--json only works with "handoff start".\n`);
     return 2;
   }
 
