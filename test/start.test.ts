@@ -1,46 +1,13 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { run } from "../src/cli.js";
-
-let root: string;
-
-beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "handoff-test-"));
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
-});
-
-function runCli(...argv: string[]) {
-  let stdout = "";
-  let stderr = "";
-  const exitCode = run(
-    argv,
-    {
-      stdout: (text) => {
-        stdout += text;
-      },
-      stderr: (text) => {
-        stderr += text;
-      },
-    },
-    root,
-  );
-  return { exitCode, stdout, stderr };
-}
-
-function writeLog(name: string, content: string) {
-  writeFileSync(join(root, ".handoff", "logs", name), content);
-}
+import { describe, expect, it } from "vitest";
+import { project, runCli, writeLog } from "./helpers.js";
 
 describe("handoff start", () => {
   it("prints the instructions, spec and rules", () => {
     runCli("init");
-    writeFileSync(join(root, ".handoff", "spec.md"), "my spec");
-    writeFileSync(join(root, ".handoff", "rules.md"), "my rules");
+    writeFileSync(join(project.root, ".handoff", "spec.md"), "my spec");
+    writeFileSync(join(project.root, ".handoff", "rules.md"), "my rules");
 
     const result = runCli("start");
 
@@ -104,7 +71,7 @@ describe("handoff start", () => {
 
   it("reports a missing required file", () => {
     runCli("init");
-    rmSync(join(root, ".handoff", "rules.md"));
+    rmSync(join(project.root, ".handoff", "rules.md"));
 
     const result = runCli("start");
 

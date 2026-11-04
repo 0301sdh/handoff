@@ -1,19 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { run } from "../src/cli.js";
-
-function runCli(...argv: string[]) {
-  let stdout = "";
-  let stderr = "";
-  const exitCode = run(argv, {
-    stdout: (text) => {
-      stdout += text;
-    },
-    stderr: (text) => {
-      stderr += text;
-    },
-  });
-  return { exitCode, stdout, stderr };
-}
+import { runCli } from "./helpers.js";
 
 describe("run", () => {
   it("shows help with --help", () => {

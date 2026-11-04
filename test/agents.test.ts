@@ -1,42 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { run } from "../src/cli.js";
+import { describe, expect, it } from "vitest";
+import { project, runCli } from "./helpers.js";
 
-let root: string;
-
-beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "handoff-test-"));
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
-});
-
-function runCli(...argv: string[]) {
-  let stdout = "";
-  let stderr = "";
-  const exitCode = run(
-    argv,
-    {
-      stdout: (text) => {
-        stdout += text;
-      },
-      stderr: (text) => {
-        stderr += text;
-      },
-    },
-    root,
-  );
-  return { exitCode, stdout, stderr };
-}
-
-const settingsPath = () => join(root, ".claude", "settings.json");
-const skillPath = () => join(root, ".claude", "skills", "handoff-end", "SKILL.md");
+const settingsPath = () => join(project.root, ".claude", "settings.json");
+const skillPath = () => join(project.root, ".claude", "skills", "handoff-end", "SKILL.md");
 
 function writeSettings(content: string) {
-  mkdirSync(join(root, ".claude"), { recursive: true });
+  mkdirSync(join(project.root, ".claude"), { recursive: true });
   writeFileSync(settingsPath(), content);
 }
 
@@ -45,7 +16,7 @@ describe("handoff init --agent claude", () => {
     const result = runCli("init", "--agent", "claude");
 
     expect(result.exitCode).toBe(0);
-    expect(existsSync(join(root, ".handoff", "spec.md"))).toBe(true);
+    expect(existsSync(join(project.root, ".handoff", "spec.md"))).toBe(true);
     expect(JSON.parse(readFileSync(settingsPath(), "utf8"))).toEqual({
       hooks: {
         SessionStart: [
@@ -62,18 +33,18 @@ describe("handoff init --agent claude", () => {
   it("does not touch Claude Code without the flag", () => {
     runCli("init");
 
-    expect(existsSync(join(root, ".claude"))).toBe(false);
+    expect(existsSync(join(project.root, ".claude"))).toBe(false);
   });
 
   it("connects a project that already has .handoff, keeping its files", () => {
     runCli("init");
-    writeFileSync(join(root, ".handoff", "spec.md"), "my spec");
+    writeFileSync(join(project.root, ".handoff", "spec.md"), "my spec");
 
     const result = runCli("init", "--agent", "claude");
 
     expect(result.exitCode).toBe(0);
     expect(existsSync(settingsPath())).toBe(true);
-    expect(readFileSync(join(root, ".handoff", "spec.md"), "utf8")).toBe("my spec");
+    expect(readFileSync(join(project.root, ".handoff", "spec.md"), "utf8")).toBe("my spec");
   });
 
   it("keeps existing settings and hooks", () => {
@@ -135,9 +106,9 @@ describe("handoff init --agent claude", () => {
 
 });
 
-const codexHooksPath = () => join(root, ".codex", "hooks.json");
-const copilotHooksPath = () => join(root, ".github", "hooks", "handoff.json");
-const sharedSkillPath = () => join(root, ".agents", "skills", "handoff-end", "SKILL.md");
+const codexHooksPath = () => join(project.root, ".codex", "hooks.json");
+const copilotHooksPath = () => join(project.root, ".github", "hooks", "handoff.json");
+const sharedSkillPath = () => join(project.root, ".agents", "skills", "handoff-end", "SKILL.md");
 
 describe("handoff init --agent codex", () => {
   it("adds the start hook and the shared skill", () => {
@@ -162,7 +133,7 @@ describe("handoff init --agent codex", () => {
 
   it("keeps other Codex hooks", () => {
     const other = { hooks: [{ type: "command", command: "echo hi" }] };
-    mkdirSync(join(root, ".codex"), { recursive: true });
+    mkdirSync(join(project.root, ".codex"), { recursive: true });
     writeFileSync(codexHooksPath(), JSON.stringify({ hooks: { Stop: [other] } }));
 
     runCli("init", "--agent", "codex");
@@ -196,7 +167,7 @@ describe("handoff init --agent copilot", () => {
   });
 
   it("does not overwrite an edited hook file", () => {
-    mkdirSync(join(root, ".github", "hooks"), { recursive: true });
+    mkdirSync(join(project.root, ".github", "hooks"), { recursive: true });
     writeFileSync(copilotHooksPath(), "my hooks");
 
     runCli("init", "--agent", "copilot");
@@ -232,7 +203,7 @@ describe("handoff init with several agents", () => {
 
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("Unknown agent: cursor");
-    expect(existsSync(join(root, ".handoff"))).toBe(false);
+    expect(existsSync(join(project.root, ".handoff"))).toBe(false);
   });
 
   it("rejects --agent on other commands", () => {

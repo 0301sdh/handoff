@@ -1,8 +1,7 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { run } from "../src/cli.js";
+import { describe, expect, it } from "vitest";
+import { project, runCli, writeLog } from "./helpers.js";
 
 const SPEC = `# 게시판
 
@@ -46,42 +45,10 @@ const VALID_LOG = `# 2026-11-03
 - 글 작성 API 구현
 `;
 
-let root: string;
-
-beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "handoff-test-"));
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
-});
-
-function runCli(...argv: string[]) {
-  let stdout = "";
-  let stderr = "";
-  const exitCode = run(
-    argv,
-    {
-      stdout: (text) => {
-        stdout += text;
-      },
-      stderr: (text) => {
-        stderr += text;
-      },
-    },
-    root,
-  );
-  return { exitCode, stdout, stderr };
-}
-
 function setUp() {
   runCli("init");
-  writeFileSync(join(root, ".handoff", "spec.md"), SPEC);
-  writeFileSync(join(root, ".handoff", "rules.md"), RULES);
-}
-
-function writeLog(name: string, content: string) {
-  writeFileSync(join(root, ".handoff", "logs", name), content);
+  writeFileSync(join(project.root, ".handoff", "spec.md"), SPEC);
+  writeFileSync(join(project.root, ".handoff", "rules.md"), RULES);
 }
 
 describe("handoff check", () => {
@@ -144,7 +111,7 @@ describe("handoff check", () => {
 
   it("does not treat R1 as R10", () => {
     setUp();
-    writeFileSync(join(root, ".handoff", "rules.md"), "- [R1] 하나\n- [R10] 열\n");
+    writeFileSync(join(project.root, ".handoff", "rules.md"), "- [R1] 하나\n- [R10] 열\n");
     writeLog("2026-11-03.md", VALID_LOG.replace("- R1: 통과", "- R10: 통과"));
 
     const result = runCli("check");
@@ -203,8 +170,8 @@ describe("handoff check", () => {
 
   it("handles Windows line endings", () => {
     setUp();
-    writeFileSync(join(root, ".handoff", "spec.md"), SPEC.replaceAll("\n", "\r\n"));
-    writeFileSync(join(root, ".handoff", "rules.md"), RULES.replaceAll("\n", "\r\n"));
+    writeFileSync(join(project.root, ".handoff", "spec.md"), SPEC.replaceAll("\n", "\r\n"));
+    writeFileSync(join(project.root, ".handoff", "rules.md"), RULES.replaceAll("\n", "\r\n"));
     writeLog("2026-11-03.md", VALID_LOG.replaceAll("\n", "\r\n"));
 
     expect(runCli("check").exitCode).toBe(0);
@@ -220,8 +187,8 @@ describe("handoff check with reference documents", () => {
 
   function setUpWithDocs() {
     setUp();
-    writeFileSync(join(root, ".handoff", "spec.md"), specWithDocs);
-    writeFileSync(join(root, "api.md"), "# API");
+    writeFileSync(join(project.root, ".handoff", "spec.md"), specWithDocs);
+    writeFileSync(join(project.root, "api.md"), "# API");
   }
 
   it("passes when every document is checked", () => {
@@ -256,7 +223,7 @@ describe("handoff check with reference documents", () => {
 
   it("reports a missing local file but not a link", () => {
     setUpWithDocs();
-    rmSync(join(root, "api.md"));
+    rmSync(join(project.root, "api.md"));
     writeLog("2026-11-03.md", VALID_LOG.replace("## 다음 할 일", docsCheck));
 
     const result = runCli("check");
@@ -269,7 +236,7 @@ describe("handoff check with reference documents", () => {
   it("reports a document without a reading condition", () => {
     setUp();
     writeFileSync(
-      join(root, ".handoff", "spec.md"),
+      join(project.root, ".handoff", "spec.md"),
       SPEC.replace("## 변경 기록", "## 참고 문서\n- [D1] api.md\n\n## 변경 기록"),
     );
     writeLog("2026-11-03.md", VALID_LOG);
@@ -282,7 +249,7 @@ describe("handoff check with reference documents", () => {
 
   it("ignores the example in the template", () => {
     runCli("init");
-    writeFileSync(join(root, ".handoff", "rules.md"), RULES);
+    writeFileSync(join(project.root, ".handoff", "rules.md"), RULES);
     writeLog(
       "2026-11-03.md",
       VALID_LOG.replace(

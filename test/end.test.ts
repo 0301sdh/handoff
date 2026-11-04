@@ -1,42 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { run } from "../src/cli.js";
+import { describe, expect, it } from "vitest";
 import { buildEndPrompt } from "../src/end.js";
+import { project, runCli } from "./helpers.js";
 
 const TODAY = new Date(2026, 0, 5);
 
-let root: string;
-
-beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "handoff-test-"));
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
-});
-
-function runCli(...argv: string[]) {
-  let stdout = "";
-  let stderr = "";
-  const exitCode = run(
-    argv,
-    {
-      stdout: (text) => {
-        stdout += text;
-      },
-      stderr: (text) => {
-        stderr += text;
-      },
-    },
-    root,
-  );
-  return { exitCode, stdout, stderr };
-}
-
 function promptFor(today: Date) {
-  const result = buildEndPrompt(root, today);
+  const result = buildEndPrompt(project.root, today);
   if (result.status !== "ready") {
     throw new Error(`Unexpected status: ${result.status}`);
   }
@@ -46,8 +17,8 @@ function promptFor(today: Date) {
 describe("handoff end", () => {
   it("prints the wrap-up steps with the spec and rules", () => {
     runCli("init");
-    writeFileSync(join(root, ".handoff", "spec.md"), "my spec");
-    writeFileSync(join(root, ".handoff", "rules.md"), "my rules");
+    writeFileSync(join(project.root, ".handoff", "spec.md"), "my spec");
+    writeFileSync(join(project.root, ".handoff", "rules.md"), "my rules");
 
     const result = runCli("end");
 
@@ -65,7 +36,7 @@ describe("handoff end", () => {
 
   it("tells the AI to keep an existing log from today", () => {
     runCli("init");
-    writeFileSync(join(root, ".handoff", "logs", "2026-01-05.md"), "morning work");
+    writeFileSync(join(project.root, ".handoff", "logs", "2026-01-05.md"), "morning work");
 
     const prompt = promptFor(TODAY);
 
@@ -75,7 +46,7 @@ describe("handoff end", () => {
 
   it("does not include a log from another day", () => {
     runCli("init");
-    writeFileSync(join(root, ".handoff", "logs", "2026-01-04.md"), "yesterday");
+    writeFileSync(join(project.root, ".handoff", "logs", "2026-01-04.md"), "yesterday");
 
     expect(promptFor(TODAY)).not.toContain("yesterday");
   });
@@ -86,7 +57,7 @@ describe("handoff end", () => {
     promptFor(TODAY);
 
     expect(() =>
-      readFileSync(join(root, ".handoff", "logs", "2026-01-05.md"), "utf8"),
+      readFileSync(join(project.root, ".handoff", "logs", "2026-01-05.md"), "utf8"),
     ).toThrow();
   });
 
@@ -99,7 +70,7 @@ describe("handoff end", () => {
 
   it("reports a missing required file", () => {
     runCli("init");
-    rmSync(join(root, ".handoff", "spec.md"));
+    rmSync(join(project.root, ".handoff", "spec.md"));
 
     const result = runCli("end");
 
