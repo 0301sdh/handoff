@@ -2,6 +2,7 @@
   "name": "handoff",
   "version": "0.1.0",
   "description": "A CLI that keeps multi-day AI coding work on track",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "handoff": "dist/bin.js"
